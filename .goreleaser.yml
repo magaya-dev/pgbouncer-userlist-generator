@@ -1,0 +1,14 @@
+builds:
+  - main: ./cmd
+    id: "pgbouncer-userlist-generator"
+    binary: pgbouncer-userlist-generator
+    goos:
+      - linux
+      - darwin
+      - windows
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
