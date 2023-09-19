@@ -39,6 +39,7 @@ func main() {
 	if errGenerate := generateUserList(ctx, db, *filePath, strings.Split(*excludeAccounts, ",")); errGenerate != nil {
 		log.Fatalf("generate userlist: %s\n", errGenerate)
 	}
+	// if trigger file exists - run reload.
 	if err := processTriggerFile(); err != nil {
 		log.Fatalf("process trigger file: %s\n", err)
 	}
@@ -101,6 +102,7 @@ where (r.rolname is null or not(r.rolname::TEXT=any($1))) and id.rolpassword is 
 			return errBackup
 		}
 	}
+	// before rename - write trigger file.
 	if err := writeTriggerFile(); err != nil {
 		return err
 	}
