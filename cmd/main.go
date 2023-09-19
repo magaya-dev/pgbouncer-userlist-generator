@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,9 +21,11 @@ import (
 )
 
 var (
-	connectionString = flag.String("connection", "", "connection string to database")
-	filePath         = flag.String("path", "/etc/pgbouncer/userlist.txt", "path to userlist.txt file")
-	excludeAccounts  = flag.String("exclude", "postgres,replicator,monitor", "exclude users from userlist.txt file")
+	connectionString  = flag.String("connection", "", "connection string to database")
+	filePath          = flag.String("path", "/etc/pgbouncer/userlist.txt", "path to userlist.txt file")
+	excludeAccounts   = flag.String("exclude", "postgres,replicator,monitor", "exclude users from userlist.txt file")
+	reloadTriggerFile = flag.String("reload-trigger-file", "/tmp/pgbouncer-userlist-generator.trigger", "path to trigger file")
+	reloadCommand     = flag.String("reload-command", "systemctl reload pgbouncer", "command to reload")
 )
 
 func main() {
@@ -35,6 +38,11 @@ func main() {
 	defer cancel()
 	if errGenerate := generateUserList(ctx, db, *filePath, strings.Split(*excludeAccounts, ",")); errGenerate != nil {
 		log.Fatalf("generate userlist: %s\n", errGenerate)
+	}
+	if checkTriggerFileExists() {
+		if err := runReloadCommand(); err != nil {
+			log.Fatalf("reload command: %s\n", err)
+		}
 	}
 }
 
@@ -53,7 +61,7 @@ select distinct
 from pg_authid as id
     left join pg_catalog.pg_auth_members m on id.oid = m.member
     left join pg_catalog.pg_roles r on m.roleid = r.oid
-where (r.rolname is null or not(r.rolname::text=ANY($1))) and id.rolpassword is not null
+where (r.rolname is null or not(r.rolname::TEXT=any($1))) and id.rolpassword is not null
 `, pq.Array(exclude))
 	if errRows != nil {
 		return errRows
@@ -94,6 +102,9 @@ where (r.rolname is null or not(r.rolname::text=ANY($1))) and id.rolpassword is 
 			fmt.Sprintf("%s.backup-%d", path, time.Now().UTC().Unix())); errBackup != nil {
 			return errBackup
 		}
+	}
+	if err := writeTriggerFile(); err != nil {
+		return err
 	}
 	return os.Rename(tmpConfigPath, path)
 }
@@ -138,4 +149,17 @@ func copyFile(src, dst string) error {
 		return errCopy
 	}
 	return out.Close()
+}
+
+func writeTriggerFile() error {
+	return os.WriteFile(*reloadTriggerFile, nil, 0600)
+}
+
+func checkTriggerFileExists() bool {
+	_, err := os.Stat(*reloadTriggerFile)
+	return err == nil
+}
+
+func runReloadCommand() error {
+	return exec.Command("/bin/bash", "-ec", *reloadCommand).Run()
 }
