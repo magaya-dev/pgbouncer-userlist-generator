@@ -39,10 +39,8 @@ func main() {
 	if errGenerate := generateUserList(ctx, db, *filePath, strings.Split(*excludeAccounts, ",")); errGenerate != nil {
 		log.Fatalf("generate userlist: %s\n", errGenerate)
 	}
-	if checkTriggerFileExists() {
-		if err := runReloadCommand(); err != nil {
-			log.Fatalf("reload command: %s\n", err)
-		}
+	if err := processTriggerFile(); err != nil {
+		log.Fatalf("process trigger file: %s\n", err)
 	}
 }
 
@@ -155,11 +153,20 @@ func writeTriggerFile() error {
 	return os.WriteFile(*reloadTriggerFile, nil, 0600)
 }
 
-func checkTriggerFileExists() bool {
-	_, err := os.Stat(*reloadTriggerFile)
-	return err == nil
-}
-
-func runReloadCommand() error {
-	return exec.Command("/bin/bash", "-ec", *reloadCommand).Run()
+// processTriggerFile:
+// if trigger file doesnt not exists:
+//   - exit
+//
+// if trigger file exist:
+//   - run reload command
+//   - remove trigger file
+func processTriggerFile() error {
+	_, errStat := os.Stat(*reloadTriggerFile)
+	if errStat != nil {
+		return nil
+	}
+	if err := exec.Command("/bin/bash", "-ec", *reloadCommand).Run(); err != nil {
+		return err
+	}
+	return os.Remove(*reloadTriggerFile)
 }
