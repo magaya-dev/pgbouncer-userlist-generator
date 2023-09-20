@@ -4,8 +4,6 @@ builds:
     binary: pgbouncer-userlist-generator
     goos:
       - linux
-      - darwin
-      - windows
 changelog:
   sort: asc
   filters:
